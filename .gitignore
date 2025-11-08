@@ -146,5 +146,6 @@ prompt_history.txt
 *.sqlcipher_salt
 data/*.db
 data/identities/
+data/users/
 data/demo-*.db
 data/continuous-test-*.db
