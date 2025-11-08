@@ -1,0 +1,13 @@
+{
+  "secp256k1": {
+    "privateKey": "5157e4312e33e1c6be51fd939cc54b9f1ea4a1627f2512f741ea7954a8283ccb",
+    "publicKey": "044a3f3be8de6e931137574d190d9a3371ee9f6d23202c308f1e4688692941f171ee3ded65aeeea13289fe6bc24d8f3201d15269954f9d10cb09e107f4c1afadb7",
+    "ethereumAddress": "0x75E79eF1CAb62cf9684E345F80F61Ed664b68BC9"
+  },
+  "ed25519": {
+    "privateKey": "72ce6cf3cbbe2ca535af29fba8e5e25b05574a4b4462511602307adc52da7c3b",
+    "publicKey": "07b9ef6e155fe8bddae7498ef6bbb3ba6bc00999d39b1777c8fbf308db02a63e",
+    "nodeId": "07b9ef6e155fe8bddae7498ef6bbb3ba6bc00999d39b1777c8fbf308db02a63e"
+  },
+  "magnetLink": "magnet:?xt=urn%3Aidentity%3Av1&secp256k1pub=044a3f3be8de6e931137574d190d9a3371ee9f6d23202c308f1e4688692941f171ee3ded65aeeea13289fe6bc24d8f3201d15269954f9d10cb09e107f4c1afadb7&ed25519pub=07b9ef6e155fe8bddae7498ef6bbb3ba6bc00999d39b1777c8fbf308db02a63e&eth=0x75E79eF1CAb62cf9684E345F80F61Ed664b68BC9"
+}
