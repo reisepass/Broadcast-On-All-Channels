@@ -4,14 +4,23 @@
  *
  * Features:
  * - Creates or loads identity
- * - Connects to all available protocols
+ * - Connects to all or selected protocols
  * - Interactive chat mode
  * - Shows acknowledgments with checkmarks
  * - Color-coded received messages
  * - Displays message delivery times per protocol
+ *
+ * Usage:
+ *   tsx src/cli.ts [options]
+ *
+ * Options:
+ *   --protocols <list>    Comma-separated list of protocols (xmtp,nostr,mqtt,waku,iroh)
+ *   --user <name>         Use specific user identity
+ *   --chat <magnet-link>  Start chatting with this user immediately
+ *   --help                Show this help message
  */
 
-import * as readline from 'readline/promises';
+import * as readline from 'node:readline/promises';
 import chalk from 'chalk';
 
 import type { UnifiedIdentity } from './identity.js';
@@ -19,6 +28,62 @@ import { ChatDatabase } from './database.js';
 import { ChatBroadcaster } from './chat-broadcaster.js';
 import type { ChatMessage } from './message-types.js';
 import { UserManager, type UserProfile } from './user-manager.js';
+import type { BroadcasterOptions } from './broadcaster.js';
+
+interface CLIArgs {
+  protocols?: string[];
+  user?: string;
+  chat?: string;
+  help?: boolean;
+}
+
+function parseArgs(): CLIArgs {
+  const args: CLIArgs = {};
+  const argv = process.argv.slice(2);
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+
+    if (arg === '--help' || arg === '-h') {
+      args.help = true;
+    } else if (arg === '--protocols' || arg === '-p') {
+      const protocolList = argv[++i];
+      if (protocolList) {
+        args.protocols = protocolList.split(',').map(p => p.trim().toLowerCase());
+      }
+    } else if (arg === '--user' || arg === '-u') {
+      args.user = argv[++i];
+    } else if (arg === '--chat' || arg === '-c') {
+      args.chat = argv[++i];
+    }
+  }
+
+  return args;
+}
+
+function showHelp() {
+  console.log(chalk.cyan.bold('Multi-Protocol Chat Client\n'));
+  console.log('Usage:');
+  console.log('  tsx src/cli.ts [options]\n');
+  console.log('  npm run chat -- [options]\n');
+  console.log('Options:');
+  console.log('  --protocols, -p <list>    Use only specified protocols (comma-separated)');
+  console.log('                            Available: xmtp, nostr, mqtt, waku, iroh');
+  console.log('                            Example: --protocols xmtp,nostr,mqtt');
+  console.log('                            Default: all protocols\n');
+  console.log('  --user, -u <name>         Use specific user identity');
+  console.log('                            Example: --user happy-blue-falcon\n');
+  console.log('  --chat, -c <magnet-link>  Start chatting with this user immediately');
+  console.log('                            Example: --chat magnet:?xt=urn%3A...\n');
+  console.log('  --help, -h                Show this help message\n');
+  console.log('Examples:');
+  console.log('  # Use only XMTP and Nostr');
+  console.log('  tsx src/cli.ts --protocols xmtp,nostr\n');
+  console.log('  # Use specific user and start chatting');
+  console.log('  tsx src/cli.ts --user happy-blue-falcon --chat magnet:?xt=...\n');
+  console.log('  # Use only MQTT');
+  console.log('  npm run chat -- --protocols mqtt\n');
+}
 
 class ChatClient {
   private identity!: UnifiedIdentity;
@@ -28,9 +93,11 @@ class ChatClient {
   private rl!: readline.Interface;
   private userManager: UserManager;
   private currentUser!: UserProfile;
+  private args: CLIArgs;
 
-  constructor() {
+  constructor(args: CLIArgs = {}) {
     this.userManager = new UserManager();
+    this.args = args;
   }
 
   async start() {
@@ -38,14 +105,14 @@ class ChatClient {
     console.log(chalk.cyan.bold('  Multi-Protocol Chat Client'));
     console.log(chalk.cyan.bold('═══════════════════════════════════════════════════════════\n'));
 
-    // Select or create user
+    // Select or create user (with optional pre-selection)
     await this.selectUser();
 
     // Initialize database with user-specific path
     this.db = new ChatDatabase(this.userManager.getUserDbPath(this.currentUser.name));
 
-    // Initialize broadcaster
-    this.broadcaster = new ChatBroadcaster(this.identity, this.db);
+    // Initialize broadcaster with protocol selection
+    this.broadcaster = new ChatBroadcaster(this.identity, this.db, this.getProtocolOptions());
 
     // Set up message handler
     this.broadcaster.onMessage((message, protocol) => {
@@ -64,12 +131,55 @@ class ChatClient {
       console.log(chalk.green('✅ Continuing with available protocols\n'));
     }
 
+    // If --chat was provided, start chatting immediately
+    if (this.args.chat) {
+      this.chatPartner = this.args.chat;
+      console.log(chalk.green(`✅ Starting chat with: ${this.chatPartner.slice(0, 50)}...`));
+      console.log(chalk.gray('Type your messages and press Enter to send\n'));
+      await this.showConversationHistory();
+    }
+
     // Start interactive mode
     await this.interactiveMode();
   }
 
+  private getProtocolOptions(): Partial<BroadcasterOptions> {
+    const options: Partial<BroadcasterOptions> = {};
+
+    if (this.args.protocols && this.args.protocols.length > 0) {
+      // Show which protocols are being used
+      console.log(chalk.yellow(`🔧 Using selected protocols: ${this.args.protocols.join(', ')}\n`));
+
+      // Disable all protocols by default, then enable only selected ones
+      options.xmtpEnabled = this.args.protocols.includes('xmtp');
+      options.nostrEnabled = this.args.protocols.includes('nostr');
+      options.mqttEnabled = this.args.protocols.includes('mqtt');
+      options.wakuEnabled = this.args.protocols.includes('waku');
+      options.irohEnabled = this.args.protocols.includes('iroh');
+    }
+
+    return options;
+  }
+
   private async selectUser() {
     const users = this.userManager.listUsers();
+
+    // If user specified via CLI args, use that
+    if (this.args.user) {
+      const user = this.userManager.loadUser(this.args.user);
+      if (user) {
+        this.currentUser = user;
+        this.userManager.updateLastUsed(this.currentUser.name);
+        console.log(chalk.green(`✅ Using user: ${chalk.bold(this.currentUser.name)}\n`));
+        this.identity = this.currentUser.identity;
+        return;
+      } else {
+        console.log(chalk.red(`❌ User '${this.args.user}' not found. Available users:\n`));
+        users.forEach(u => console.log(chalk.gray(`  - ${u.name}`)));
+        console.log('');
+        process.exit(1);
+      }
+    }
 
     if (users.length === 0) {
       console.log(chalk.blue('👋 Welcome! Creating your first user...\n'));
@@ -320,6 +430,15 @@ class ChatClient {
   }
 }
 
-// Start the client
-const client = new ChatClient();
+// Parse command-line arguments
+const args = parseArgs();
+
+// Show help and exit if requested
+if (args.help) {
+  showHelp();
+  process.exit(0);
+}
+
+// Start the client with parsed arguments
+const client = new ChatClient(args);
 client.start().catch(console.error);

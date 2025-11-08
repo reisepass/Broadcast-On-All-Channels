@@ -4,14 +4,12 @@ Get up and running with Broadcast-On-All-Channels in under 5 minutes!
 
 ## 1. Install Dependencies
 
-Choose your runtime:
-
 ```bash
-# Bun (recommended - fastest)
-bun install
-
-# Node.js
+# Node.js (default)
 npm install
+
+# Or use Bun for faster installation
+bun install
 
 # Deno (no install needed)
 ```
@@ -19,13 +17,13 @@ npm install
 ## 2. Run the Demo
 
 ```bash
-# Bun
-bun run demo
+# Node.js (default)
+npm run demo
 
-# Node.js
-npm run node:demo
+# Or use Bun
+npm run bun:demo
 
-# Deno
+# Or use Deno
 npm run deno:demo
 ```
 
@@ -38,13 +36,13 @@ The demo will:
 ## 3. Start the Interactive Chat
 
 ```bash
-# Bun
-bun run chat
+# Node.js (default)
+npm run chat
 
-# Node.js
-npm run node:chat
+# Or use Bun
+npm run bun:chat
 
-# Deno
+# Or use Deno
 npm run deno:chat
 ```
 
@@ -58,20 +56,17 @@ The chat will:
 ## 4. Test Individual Channels
 
 ```bash
-# Test XMTP
-bun run test:xmtp
+# Node.js (default)
+npm run test:xmtp
+npm run test:nostr
+npm run test:mqtt
+npm run test:waku
+npm run test:iroh
 
-# Test Nostr
-bun run test:nostr
-
-# Test MQTT
-bun run test:mqtt
-
-# Test Waku
-bun run test:waku
-
-# Test IROH
-bun run test:iroh
+# Or use Bun
+npm run bun:test:xmtp
+npm run bun:test:nostr
+# ... etc
 ```
 
 ## 5. Run Unit Tests
@@ -89,17 +84,18 @@ bun test:integration
 
 ## Command Cheat Sheet
 
-### Bun (Recommended)
+### Node.js (Default)
 ```bash
-bun run chat           # Start chat
-bun run demo           # Run demo
-bun test              # Run tests
+npm run chat           # Start chat
+npm run demo           # Run demo
+npm run test:xmtp      # Test individual channels
 ```
 
-### Node.js
+### Bun
 ```bash
-npm run node:chat      # Start chat
-npm run node:demo      # Run demo
+npm run bun:chat       # Start chat
+npm run bun:demo       # Run demo
+bun test              # Run unit tests (built-in test runner)
 ```
 
 ### Deno

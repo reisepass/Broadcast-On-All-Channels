@@ -105,7 +105,9 @@ async function main() {
 
     console.log('');
     console.log(`✅ Success: ${successCount}/${results.length} protocols`);
-    console.log(`❌ Failed: ${failCount}/${results.length} protocols`);
+    if (failCount > 0) {
+      console.log(`❌ Failed: ${failCount}/${results.length} protocols`);
+    }
 
     if (successCount === 0) {
       console.log('\n⚠️  All protocols failed. The message was not delivered.');

@@ -11,7 +11,7 @@
 import { Broadcaster, type BroadcastResult } from './broadcaster.js';
 import type { UnifiedIdentity } from './identity.js';
 import { ChatDatabase } from './database.js';
-import { supportsXMTP } from './runtime.js';
+import { supportsXMTP, supportsWaku } from './runtime.js';
 import {
   type ChatMessage,
   type AcknowledgmentMessage,
@@ -36,12 +36,13 @@ export class ChatBroadcaster extends Broadcaster {
   private seenMessageUuids: Set<string> = new Set();
   private myMagnetLink: string;
 
-  constructor(identity: UnifiedIdentity, db: ChatDatabase) {
-    super(identity, {
+  constructor(identity: UnifiedIdentity, db: ChatDatabase, options?: Partial<BroadcasterOptions>) {
+    // Merge provided options with defaults
+    const defaultOptions: BroadcasterOptions = {
       xmtpEnabled: supportsXMTP(), // Auto-enabled on Node.js/Deno
       xmtpEnv: 'dev',
       nostrEnabled: true,
-      wakuEnabled: true,  // ✅ Enabled - P2P messaging with Waku
+      wakuEnabled: supportsWaku(),  // Auto-enabled on Node.js/Bun (Deno needs --unstable-broadcast-channel)
       mqttEnabled: true,  // ✅ Enabled - using multiple public brokers
       mqttBrokers: [
         'mqtt://broker.hivemq.com:1883',
@@ -49,7 +50,12 @@ export class ChatBroadcaster extends Broadcaster {
         'mqtt://test.mosquitto.org:1883',
       ],
       irohEnabled: true,
-    });
+    };
+
+    // Override defaults with provided options
+    const mergedOptions = { ...defaultOptions, ...options };
+
+    super(identity, mergedOptions);
 
     this.db = db;
     this.myMagnetLink = identity.magnetLink;
@@ -136,13 +142,13 @@ export class ChatBroadcaster extends Broadcaster {
   }
 
   private async sendAcknowledgment(originalMessage: ChatMessage, receivedVia: string): Promise<void> {
-    // Get my channel preferences (XMTP auto-disabled on Bun)
+    // Get my channel preferences (auto-disabled based on runtime)
     const myPreferences: ChannelPreferenceInfo[] = [
       { protocol: 'nostr', preferenceOrder: 1, cannotUse: false },
       { protocol: 'XMTP V3', preferenceOrder: 2, cannotUse: !supportsXMTP() },
       { protocol: 'MQTT', preferenceOrder: 3, cannotUse: false },
       { protocol: 'IROH', preferenceOrder: 4, cannotUse: false },
-      { protocol: 'Waku', preferenceOrder: 5, cannotUse: false },
+      { protocol: 'Waku', preferenceOrder: 5, cannotUse: !supportsWaku() },
     ];
 
     const ack = createAcknowledgment(
@@ -243,22 +249,30 @@ export class ChatBroadcaster extends Broadcaster {
       // Stream all DM messages
       const stream = await this.xmtpClient.conversations.streamAllDmMessages();
 
-      // Process messages as they arrive
-      for await (const message of stream) {
+      // Process messages in the background (don't await this loop)
+      (async () => {
         try {
-          // Deserialize the message content
-          const chatMessage = deserializeMessage(message.content);
-          if (!chatMessage) {
-            console.error('Failed to deserialize XMTP message');
-            continue;
-          }
+          for await (const message of stream) {
+            try {
+              // Deserialize the message content
+              const chatMessage = deserializeMessage(message.content);
+              if (!chatMessage) {
+                console.error('Failed to deserialize XMTP message');
+                continue;
+              }
 
-          // Handle the message
-          this.handleIncomingMessage(chatMessage, 'XMTP V3');
+              // Handle the message
+              this.handleIncomingMessage(chatMessage, 'XMTP V3');
+            } catch (error) {
+              console.error('Error processing XMTP message:', error);
+            }
+          }
         } catch (error) {
-          console.error('Error processing XMTP message:', error);
+          console.error('Error in XMTP message stream:', error);
         }
-      }
+      })();
+
+      // Return immediately after starting the stream
     } catch (error) {
       console.error('Error starting XMTP listener:', error);
     }
@@ -318,7 +332,11 @@ export class ChatBroadcaster extends Broadcaster {
         // Handle the message
         await this.handleIncomingMessage(chatMessage, 'IROH');
       } catch (error) {
-        console.error('Error processing IROH message:', error);
+        // Silently ignore connection errors - they're expected when no peer is available
+        const errMsg = String(error);
+        if (!errMsg.includes('connection lost') && !errMsg.includes('closed by peer')) {
+          console.error('Error processing IROH message:', error);
+        }
       }
     };
   }

@@ -2,7 +2,7 @@
  * Message Types and Utilities
  */
 
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
 
 export interface ChatMessage {
   uuid: string;

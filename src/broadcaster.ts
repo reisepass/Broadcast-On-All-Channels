@@ -25,6 +25,7 @@ import {
   getIrohKeys,
   decodeIdentity,
 } from './identity.js';
+import { supportsXMTP, supportsWaku } from './runtime.js';
 
 // Helper to create XMTP-compatible signer from viem account
 function createXMTPSigner(identity: UnifiedIdentity): Signer {
@@ -79,11 +80,11 @@ export interface BroadcasterOptions {
 }
 
 const DEFAULT_OPTIONS: BroadcasterOptions = {
-  xmtpEnabled: true,
+  xmtpEnabled: supportsXMTP(), // Auto-enabled on Node.js/Deno
   xmtpEnv: 'production',
   nostrEnabled: true,
   nostrRelays: ['wss://relay.damus.io', 'wss://nos.lol', 'wss://relay.nostr.band'],
-  wakuEnabled: true,
+  wakuEnabled: supportsWaku(), // Auto-enabled on Node.js/Bun (Deno needs --unstable-broadcast-channel)
   mqttEnabled: true,
   mqttBrokers: [
     'mqtt://broker.hivemq.com:1883',
@@ -159,16 +160,16 @@ export class Broadcaster {
       const { randomBytes } = await import('node:crypto');
       const path = await import('node:path');
 
-      // Create encryption key as Buffer (better compatibility with native bindings)
-      const dbEncryptionKey = randomBytes(32);
+      // Create encryption key as Uint8Array (32 bytes for 256-bit encryption)
+      const dbEncryptionKey = new Uint8Array(randomBytes(32));
 
       // Create absolute database path for XMTP's encrypted message store
       const account = getEthereumAccount(this.identity);
       const dbPath = path.resolve(process.cwd(), `xmtp-${this.options.xmtpEnv}-${account.address}.db3`);
 
-      this.xmtpClient = await XMTPClient.create(signer, {
+      // Note: encryptionKey is the SECOND parameter, not in options
+      this.xmtpClient = await XMTPClient.create(signer, dbEncryptionKey, {
         env: this.options.xmtpEnv === 'production' ? 'production' : 'dev',
-        dbEncryptionKey: dbEncryptionKey,
         dbPath: dbPath,
       });
       console.log('✅ XMTP client initialized');

@@ -10,8 +10,8 @@
 
 import { createClient } from '@libsql/client';
 import type { Client, ResultSet } from '@libsql/client';
-import { existsSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 export interface Message {
   id?: number;
@@ -144,7 +144,7 @@ export class ChatDatabase {
   async saveMessage(message: Message): Promise<void> {
     await this.db.execute({
       sql: `
-        INSERT INTO messages (uuid, from_identity, to_identity, content, timestamp, is_acknowledgment, first_received_protocol, first_received_at)
+        INSERT OR IGNORE INTO messages (uuid, from_identity, to_identity, content, timestamp, is_acknowledgment, first_received_protocol, first_received_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
       args: [

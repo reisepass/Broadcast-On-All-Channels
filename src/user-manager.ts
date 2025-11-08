@@ -7,8 +7,8 @@
  * - User selection on startup
  */
 
-import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import type { UnifiedIdentity } from './identity.js';
 import { generateIdentity } from './identity.js';
 

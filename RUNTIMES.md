@@ -4,15 +4,16 @@ This project supports running with **Bun**, **Node.js**, and **Deno**. Each runt
 
 ## Prerequisites
 
-### Bun (Recommended)
-```bash
-curl -fsSL https://bun.sh/install | bash
-```
-
-### Node.js
+### Node.js (Default)
 ```bash
 # Install Node.js 20+ from https://nodejs.org
 npm install  # Install dependencies including tsx
+```
+
+### Bun
+```bash
+curl -fsSL https://bun.sh/install | bash
+bun install
 ```
 
 ### Deno
@@ -22,21 +23,21 @@ curl -fsSL https://deno.land/install.sh | sh
 
 ## Available Commands
 
-### Bun Commands (Default)
+### Default Commands (Node.js with tsx)
 
 ```bash
 # Main applications
-bun run chat          # Interactive chat client
-bun run demo          # Full broadcast demo
+npm run chat          # Interactive chat client
+npm run demo          # Full broadcast demo
 
 # Protocol examples
-bun run test:xmtp
-bun run test:nostr
-bun run test:iroh
-bun run test:waku
-bun run test:mqtt
+npm run test:xmtp
+npm run test:nostr
+npm run test:iroh
+npm run test:waku
+npm run test:mqtt
 
-# Unit tests
+# Unit tests (use Bun)
 bun test                      # Run all tests
 bun test:watch               # Watch mode
 bun test:channels:xmtp       # Individual channel tests
@@ -47,14 +48,32 @@ bun test:channels:iroh
 bun test:integration         # Integration tests
 ```
 
-### Node.js Commands
+### Bun Commands
 
 ```bash
 # Main applications
-npm run node:chat     # Interactive chat client
-npm run node:demo     # Full broadcast demo
+npm run bun:chat      # Interactive chat client
+npm run bun:demo      # Full broadcast demo
 
 # Protocol examples
+npm run bun:test:xmtp
+npm run bun:test:nostr
+npm run bun:test:iroh
+npm run bun:test:waku
+npm run bun:test:mqtt
+
+# Unit tests (Bun's built-in test runner)
+bun test                      # Run all tests
+bun test:watch               # Watch mode
+bun test:channels:xmtp       # Individual channel tests
+```
+
+### Node.js Commands (explicit)
+
+```bash
+# Same as default, but explicit
+npm run node:chat
+npm run node:demo
 npm run node:test:xmtp
 npm run node:test:nostr
 npm run node:test:iroh
@@ -79,32 +98,32 @@ npm run deno:test:mqtt
 
 ## Runtime Comparison
 
-| Feature | Bun | Node.js | Deno |
-|---------|-----|---------|------|
-| TypeScript Support | ✅ Native | ⚠️ Requires tsx | ✅ Native |
-| Installation Speed | ✅ Very Fast | ⚠️ Slower | ✅ Fast |
-| Startup Time | ✅ Very Fast | ⚠️ Moderate | ✅ Fast |
+| Feature | Node.js | Bun | Deno |
+|---------|---------|-----|------|
+| TypeScript Support | ✅ Via tsx | ✅ Native | ✅ Native |
+| Installation Speed | ⚠️ Moderate | ✅ Very Fast | ✅ Fast |
+| Startup Time | ⚠️ Moderate | ✅ Very Fast | ✅ Fast |
 | npm Package Support | ✅ Full | ✅ Full | ⚠️ Most packages |
-| Built-in Test Runner | ✅ Yes | ❌ No (needs jest/mocha) | ✅ Yes |
-| Native APIs | ✅ Web + Node | ✅ Node | ✅ Web |
-| Maturity | ⚠️ Newer | ✅ Very Mature | ✅ Mature |
-| Bundle Size | ✅ Small | ⚠️ Large | ✅ Small |
+| Built-in Test Runner | ❌ No (needs jest/mocha) | ✅ Yes | ✅ Yes |
+| Native APIs | ✅ Node | ✅ Web + Node | ✅ Web |
+| Maturity | ✅ Very Mature | ⚠️ Newer | ✅ Mature |
+| Production Ready | ✅ Yes | ⚠️ Beta | ✅ Yes |
 
 ## Runtime-Specific Notes
+
+### Node.js (Default)
+- **Best for production**: Most mature ecosystem
+- Uses `tsx` for fast TypeScript execution
+- Full npm package compatibility
+- Industry standard for backend applications
+- Default runtime for this project
 
 ### Bun
 - **Best for development**: Fastest startup, native TypeScript, built-in test runner
 - Native SQLite support
 - Compatible with most Node.js packages
 - Hot reload support
-- Recommended for this project
-
-### Node.js
-- **Best for production**: Most mature ecosystem
-- Requires `tsx` for TypeScript execution
-- Slightly slower startup time
-- Full npm package compatibility
-- Traditional choice for backend applications
+- Great for local development and testing
 
 ### Deno
 - **Best for security**: Permission-based security model
@@ -176,15 +195,17 @@ Approximate startup times (may vary by system):
 
 ## Which Runtime Should I Use?
 
+**Choose Node.js if:**
+- You're deploying to production (default choice)
+- You need maximum package compatibility
+- You want the most mature and stable ecosystem
+- Your deployment environment requires Node.js
+
 **Choose Bun if:**
 - You want the fastest development experience
 - You're developing and testing frequently
 - You want built-in TypeScript and test support
-
-**Choose Node.js if:**
-- You're deploying to production
-- You need maximum package compatibility
-- Your deployment environment requires Node.js
+- You need faster iteration cycles
 
 **Choose Deno if:**
 - You prefer secure-by-default execution
@@ -196,11 +217,11 @@ Approximate startup times (may vary by system):
 ### Run the demo with all runtimes
 
 ```bash
-# Bun (recommended)
-bun run demo
+# Node.js (default)
+npm run demo
 
-# Node.js
-npm run node:demo
+# Bun
+npm run bun:demo
 
 # Deno
 npm run deno:demo
@@ -209,11 +230,11 @@ npm run deno:demo
 ### Start the interactive chat
 
 ```bash
-# Bun
-bun run chat
+# Node.js (default)
+npm run chat
 
-# Node.js
-npm run node:chat
+# Bun
+npm run bun:chat
 
 # Deno
 npm run deno:chat

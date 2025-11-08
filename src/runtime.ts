@@ -39,6 +39,17 @@ export function supportsXMTP(): boolean {
 }
 
 /**
+ * Check if the current runtime supports Waku
+ * Waku requires BroadcastChannel which is unstable in Deno
+ * (Deno requires --unstable-broadcast-channel flag)
+ */
+export function supportsWaku(): boolean {
+  const runtime = detectRuntime();
+  // Waku works on Node.js and Bun, but requires --unstable-broadcast-channel on Deno
+  return runtime === 'node' || runtime === 'bun';
+}
+
+/**
  * Get a display name for the current runtime
  */
 export function getRuntimeName(): string {
@@ -61,12 +72,17 @@ export function getRuntimeName(): string {
 export function logRuntimeInfo(): void {
   const runtime = detectRuntime();
   const xmtpSupport = supportsXMTP();
+  const wakuSupport = supportsWaku();
 
   console.log(`🔧 Runtime: ${getRuntimeName()}`);
   console.log(`   XMTP Support: ${xmtpSupport ? '✅' : '❌'}`);
+  console.log(`   Waku Support: ${wakuSupport ? '✅' : '❌'}`);
 
   if (!xmtpSupport) {
     console.log(`   Note: XMTP native bindings require Node.js or Deno`);
+  }
+  if (!wakuSupport) {
+    console.log(`   Note: Waku requires BroadcastChannel (run Deno with --unstable-broadcast-channel)`);
   }
   console.log('');
 }

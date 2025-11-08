@@ -144,3 +144,7 @@ prompt_history.txt
 *.db3-shm
 *.db3-wal
 *.sqlcipher_salt
+data/*.db
+data/identities/
+data/demo-*.db
+data/continuous-test-*.db
