@@ -68,7 +68,44 @@ export class ChatDatabase {
     this.initTables();
   }
 
+  /**
+   * Execute a query with retry logic for SQLITE_BUSY errors
+   */
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 5,
+    delayMs: number = 100
+  ): Promise<T> {
+    let lastError: any;
+
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        lastError = error;
+
+        // Only retry on SQLITE_BUSY errors
+        if (error.code === 'SQLITE_BUSY' && i < maxRetries - 1) {
+          // Exponential backoff with jitter
+          const delay = delayMs * Math.pow(2, i) + Math.random() * 50;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    throw lastError;
+  }
+
   private async initTables() {
+    // Enable WAL mode for better concurrent access
+    await this.db.execute('PRAGMA journal_mode = WAL');
+
+    // Set a busy timeout (10 seconds)
+    await this.db.execute('PRAGMA busy_timeout = 10000');
+
     // Messages table
     await this.db.execute(`
       CREATE TABLE IF NOT EXISTS messages (
@@ -142,22 +179,24 @@ export class ChatDatabase {
 
   // Message operations
   async saveMessage(message: Message): Promise<void> {
-    await this.db.execute({
-      sql: `
-        INSERT OR IGNORE INTO messages (uuid, from_identity, to_identity, content, timestamp, is_acknowledgment, first_received_protocol, first_received_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      args: [
-        message.uuid,
-        message.fromIdentity,
-        message.toIdentity,
-        message.content,
-        message.timestamp,
-        message.isAcknowledgment ? 1 : 0,
-        message.firstReceivedProtocol || null,
-        message.firstReceivedAt || null,
-      ],
-    });
+    await this.executeWithRetry(() =>
+      this.db.execute({
+        sql: `
+          INSERT OR IGNORE INTO messages (uuid, from_identity, to_identity, content, timestamp, is_acknowledgment, first_received_protocol, first_received_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        args: [
+          message.uuid,
+          message.fromIdentity,
+          message.toIdentity,
+          message.content,
+          message.timestamp,
+          message.isAcknowledgment ? 1 : 0,
+          message.firstReceivedProtocol || null,
+          message.firstReceivedAt || null,
+        ],
+      })
+    );
   }
 
   async getMessage(uuid: string): Promise<Message | undefined> {
@@ -183,14 +222,16 @@ export class ChatDatabase {
   }
 
   async updateMessageFirstReceipt(uuid: string, protocol: string, receivedAt: number): Promise<void> {
-    await this.db.execute({
-      sql: `
-        UPDATE messages
-        SET first_received_protocol = ?, first_received_at = ?
-        WHERE uuid = ? AND first_received_protocol IS NULL
-      `,
-      args: [protocol, receivedAt, uuid],
-    });
+    await this.executeWithRetry(() =>
+      this.db.execute({
+        sql: `
+          UPDATE messages
+          SET first_received_protocol = ?, first_received_at = ?
+          WHERE uuid = ? AND first_received_protocol IS NULL
+        `,
+        args: [protocol, receivedAt, uuid],
+      })
+    );
   }
 
   async getConversation(identity1: string, identity2: string, limit: number = 50): Promise<Message[]> {
@@ -222,13 +263,15 @@ export class ChatDatabase {
 
   // Message receipt operations
   async saveMessageReceipt(receipt: MessageReceipt): Promise<void> {
-    await this.db.execute({
-      sql: `
-        INSERT INTO message_receipts (message_uuid, protocol, received_at, latency_ms)
-        VALUES (?, ?, ?, ?)
-      `,
-      args: [receipt.messageUuid, receipt.protocol, receipt.receivedAt, receipt.latencyMs],
-    });
+    await this.executeWithRetry(() =>
+      this.db.execute({
+        sql: `
+          INSERT INTO message_receipts (message_uuid, protocol, received_at, latency_ms)
+          VALUES (?, ?, ?, ?)
+        `,
+        args: [receipt.messageUuid, receipt.protocol, receipt.receivedAt, receipt.latencyMs],
+      })
+    );
   }
 
   async getMessageReceipts(messageUuid: string): Promise<MessageReceipt[]> {
@@ -248,27 +291,29 @@ export class ChatDatabase {
 
   // Channel preference operations
   async updateChannelPreference(pref: ChannelPreference): Promise<void> {
-    await this.db.execute({
-      sql: `
-        INSERT INTO channel_preferences (identity, protocol, is_working, last_ack_at, avg_latency_ms, preference_order, cannot_use)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(identity, protocol) DO UPDATE SET
-          is_working = excluded.is_working,
-          last_ack_at = excluded.last_ack_at,
-          avg_latency_ms = excluded.avg_latency_ms,
-          preference_order = COALESCE(excluded.preference_order, preference_order),
-          cannot_use = excluded.cannot_use
-      `,
-      args: [
-        pref.identity,
-        pref.protocol,
-        pref.isWorking ? 1 : 0,
-        pref.lastAckAt || null,
-        pref.avgLatencyMs || null,
-        pref.preferenceOrder || null,
-        pref.cannotUse ? 1 : 0,
-      ],
-    });
+    await this.executeWithRetry(() =>
+      this.db.execute({
+        sql: `
+          INSERT INTO channel_preferences (identity, protocol, is_working, last_ack_at, avg_latency_ms, preference_order, cannot_use)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(identity, protocol) DO UPDATE SET
+            is_working = excluded.is_working,
+            last_ack_at = excluded.last_ack_at,
+            avg_latency_ms = excluded.avg_latency_ms,
+            preference_order = COALESCE(excluded.preference_order, preference_order),
+            cannot_use = excluded.cannot_use
+        `,
+        args: [
+          pref.identity,
+          pref.protocol,
+          pref.isWorking ? 1 : 0,
+          pref.lastAckAt || null,
+          pref.avgLatencyMs || null,
+          pref.preferenceOrder || null,
+          pref.cannotUse ? 1 : 0,
+        ],
+      })
+    );
   }
 
   async getChannelPreferences(identity: string): Promise<ChannelPreference[]> {
@@ -294,35 +339,37 @@ export class ChatDatabase {
     const now = Date.now();
     const ackedInt = acked ? 1 : 0;
 
-    await this.db.execute({
-      sql: `
-        INSERT INTO protocol_performance (protocol, total_sent, total_acked, avg_latency_ms, last_used_at)
-        VALUES (?, 1, ?, ?, ?)
-        ON CONFLICT(protocol) DO UPDATE SET
-          total_sent = total_sent + 1,
-          total_acked = total_acked + ?,
-          avg_latency_ms = CASE
-            WHEN ? IS NOT NULL THEN
-              CASE
-                WHEN avg_latency_ms IS NULL THEN ?
-                ELSE (avg_latency_ms + ?) / 2
-              END
-            ELSE avg_latency_ms
-          END,
-          last_used_at = ?
-      `,
-      args: [
-        protocol,
-        ackedInt,
-        latencyMs || null,
-        now,
-        ackedInt,
-        latencyMs || null,
-        latencyMs || null,
-        latencyMs || null,
-        now,
-      ],
-    });
+    await this.executeWithRetry(() =>
+      this.db.execute({
+        sql: `
+          INSERT INTO protocol_performance (protocol, total_sent, total_acked, avg_latency_ms, last_used_at)
+          VALUES (?, 1, ?, ?, ?)
+          ON CONFLICT(protocol) DO UPDATE SET
+            total_sent = total_sent + 1,
+            total_acked = total_acked + ?,
+            avg_latency_ms = CASE
+              WHEN ? IS NOT NULL THEN
+                CASE
+                  WHEN avg_latency_ms IS NULL THEN ?
+                  ELSE (avg_latency_ms + ?) / 2
+                END
+              ELSE avg_latency_ms
+            END,
+            last_used_at = ?
+        `,
+        args: [
+          protocol,
+          ackedInt,
+          latencyMs || null,
+          now,
+          ackedInt,
+          latencyMs || null,
+          latencyMs || null,
+          latencyMs || null,
+          now,
+        ],
+      })
+    );
   }
 
   async getProtocolPerformance(): Promise<ProtocolPerformance[]> {
