@@ -523,11 +523,23 @@ export class Broadcaster {
 
       this.logger.info(`🔵 [Nostr] Publishing to ${connectedRelays.length}/${this.nostrRelays.length} connected relays...`);
 
-      // Publish to all connected relays with individual error handling
-      const publishResults = await Promise.allSettled(
-        connectedRelays.map(relay => relay.publish(signedEvent))
-      );
+      // Publish to all connected relays and track first success
+      let firstSuccessTime: number | null = null;
+      const publishPromises = connectedRelays.map(async (relay, index) => {
+        try {
+          await relay.publish(signedEvent);
+          // Record first success time
+          if (firstSuccessTime === null) {
+            firstSuccessTime = Date.now();
+            this.logger.info(`✅ [Nostr] First relay confirmed (relay ${index + 1})`);
+          }
+          return { status: 'fulfilled' as const };
+        } catch (error) {
+          return { status: 'rejected' as const, error };
+        }
+      });
 
+      const publishResults = await Promise.allSettled(publishPromises);
       const successCount = publishResults.filter(r => r.status === 'fulfilled').length;
       const failureCount = publishResults.filter(r => r.status === 'rejected').length;
 
@@ -541,9 +553,9 @@ export class Broadcaster {
 
       this.logger.info(`✅ [Nostr] Message published successfully to ${successCount} relays`);
       return {
-        protocol: `Nostr (${this.nostrRelays.length} relays)`,
+        protocol: `Nostr (${successCount}/${this.nostrRelays.length} relays)`,
         success: true,
-        latencyMs: Date.now() - startTime,
+        latencyMs: firstSuccessTime ? firstSuccessTime - startTime : Date.now() - startTime,
       };
     } catch (error) {
       // Nostr failures are expected in a redundant system - log as debug, not error
@@ -646,19 +658,31 @@ export class Broadcaster {
     });
 
     // Publish to all connected brokers in parallel
+    // Track first success for accurate latency measurement
+    let firstSuccessTime: number | null = null;
+    let completedCount = 0;
+    let successCount = 0;
+
     const publishPromises = this.mqttClients.map((client, index) => {
       return new Promise<{ success: boolean; error?: string }>((resolve) => {
         try {
           client.publish(topic, payload, { qos: 1, retain: true }, (err) => {
+            completedCount++;
             if (err) {
               this.logger.debug(`[MQTT] Broker ${index + 1} failed (expected in redundant system):`, err);
               resolve({ success: false, error: String(err) });
             } else {
-              this.logger.info(`✅ [MQTT] Broker ${index + 1} success`);
+              successCount++;
+              // Record first success time
+              if (firstSuccessTime === null) {
+                firstSuccessTime = Date.now();
+              }
+              this.logger.info(`✅ [MQTT] Broker ${index + 1} success (${completedCount}/${this.mqttClients.length})`);
               resolve({ success: true });
             }
           });
         } catch (error) {
+          completedCount++;
           this.logger.debug(`[MQTT] Broker ${index + 1} exception (expected in redundant system):`, error);
           resolve({ success: false, error: String(error) });
         }
@@ -666,14 +690,14 @@ export class Broadcaster {
     });
 
     const results = await Promise.all(publishPromises);
-    const successCount = results.filter(r => r.success).length;
-    this.logger.info(`🟠 [MQTT] Published to ${successCount}/${this.mqttClients.length} brokers`);
+    const finalSuccessCount = results.filter(r => r.success).length;
+    this.logger.info(`🟠 [MQTT] Published to ${finalSuccessCount}/${this.mqttClients.length} brokers`);
 
     return {
-      protocol: `MQTT (${successCount}/${this.mqttClients.length} brokers)`,
-      success: successCount > 0,
-      error: successCount === 0 ? results[0]?.error : undefined,
-      latencyMs: Date.now() - startTime,
+      protocol: `MQTT (${finalSuccessCount}/${this.mqttClients.length} brokers)`,
+      success: finalSuccessCount > 0,
+      error: finalSuccessCount === 0 ? results[0]?.error : undefined,
+      latencyMs: firstSuccessTime ? firstSuccessTime - startTime : Date.now() - startTime,
     };
   }
 
