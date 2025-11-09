@@ -1,7 +1,8 @@
 /**
  * Rate Limit Detection Utility
  *
- * Detects rate limiting errors from different protocols and suggests cooldown periods
+ * Detects rate limiting errors and connection failures from different protocols
+ * and suggests cooldown periods
  */
 
 export interface RateLimitDetection {
@@ -9,6 +10,7 @@ export interface RateLimitDetection {
   errorType: string;
   cooldownMs?: number;
   suggestedRetryAfter?: number;
+  isConnectionFailure?: boolean;
 }
 
 /**
@@ -118,19 +120,48 @@ export function detectRateLimit(error: Error, protocol: string): RateLimitDetect
     };
   }
 
-  // Check for network-related errors
+  // Check for connection-related errors that should trigger cooldown
   if (
-    errorMsg.includes('timeout') ||
-    errorMsg.includes('network') ||
-    errorMsg.includes('connection')
+    errorMsg.includes('connection refused') ||
+    errorMsg.includes('connection failed') ||
+    errorMsg.includes('econnrefused') ||
+    errorMsg.includes('bad username or password') ||
+    errorMsg.includes('authentication failed') ||
+    errorMsg.includes('not authorized')
   ) {
     return {
-      isRateLimited: false,
-      errorType: 'network',
+      isRateLimited: true, // Treat as rate limit for cooldown purposes
+      errorType: 'connection_failure',
+      cooldownMs: 5 * 60 * 1000, // 5 minutes for connection failures
+      isConnectionFailure: true,
     };
   }
 
-  // Generic error
+  // Check for network timeout errors (shorter cooldown)
+  if (
+    errorMsg.includes('timeout') ||
+    errorMsg.includes('etimedout') ||
+    errorMsg.includes('network error')
+  ) {
+    return {
+      isRateLimited: true, // Treat as rate limit for cooldown purposes
+      errorType: 'network_timeout',
+      cooldownMs: 2 * 60 * 1000, // 2 minutes for timeouts
+      isConnectionFailure: true,
+    };
+  }
+
+  // Generic connection error
+  if (errorMsg.includes('connection') || errorMsg.includes('network')) {
+    return {
+      isRateLimited: true,
+      errorType: 'network',
+      cooldownMs: 3 * 60 * 1000, // 3 minutes for generic network errors
+      isConnectionFailure: true,
+    };
+  }
+
+  // Generic error (don't trigger cooldown)
   return {
     isRateLimited: false,
     errorType: 'unknown',

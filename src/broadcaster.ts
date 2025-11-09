@@ -89,9 +89,18 @@ const DEFAULT_OPTIONS: BroadcasterOptions = {
   wakuEnabled: supportsWaku(), // Auto-enabled on Node.js/Bun (Deno needs --unstable-broadcast-channel)
   mqttEnabled: true,
   mqttBrokers: [
-    'mqtt://broker.hivemq.com:1883',
-    'mqtt://broker.emqx.io:1883',
-    'mqtt://test.mosquitto.org:1883',
+    // Primary brokers (most reliable, no auth)
+    'mqtt://broker.hivemq.com:1883',         // HiveMQ - supports persistent sessions
+    'mqtt://broker.emqx.io:1883',            // EMQX - persistent sessions, offline queuing
+    'mqtt://test.mosquitto.org:1883',        // Mosquitto - widely used test broker
+
+    // Additional public brokers (no auth required)
+    'mqtt://public-mqtt-broker.bevywise.com:1883',  // Bevywise - no auth, no persistent storage
+    'mqtt://iot.coreflux.cloud:1883',        // Coreflux - no auth needed
+    'mqtt://mqtt.tyckr.io:1883',             // Tyckr - no auth, some persistence
+
+    // Note: mqtt.flespi.io requires authentication, so excluded from default list
+    // Users can add it manually with credentials via mqttBrokers option
   ],
   irohEnabled: true,
 };

@@ -89,23 +89,29 @@ export class BroadcasterWithTracking extends Broadcaster {
           ? detectRateLimit(new Error(result.error), protocol)
           : { isRateLimited: false, errorType: 'none' };
 
-        // Record rate limit event if detected
+        // Record rate limit event or connection failure if detected
         if (rateLimitDetection.isRateLimited) {
           const cooldownMs = rateLimitDetection.cooldownMs || 60000;
+          const isConnectionFailure = rateLimitDetection.isConnectionFailure || false;
+
+          // Determine reason message
+          const reason = isConnectionFailure
+            ? `Connection failure: ${result.error || 'Unable to connect'}`
+            : result.error || 'Rate limit detected';
 
           // Set cooldown in rate limit manager
           this.rateLimitManager.setCooldown(
             protocol,
             relay,
             cooldownMs,
-            result.error || 'Rate limit detected'
+            reason
           );
 
           // Record in database
           await this.db.recordRateLimitEvent({
             protocol,
             relay,
-            errorMessage: result.error || 'Rate limit detected',
+            errorMessage: reason,
             cooldownUntil: now + cooldownMs,
           });
         }
