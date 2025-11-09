@@ -6,6 +6,7 @@
   "scripts": {
     "chat": "tsx src/cli.ts",
     "identity": "tsx src/identity-cli.ts",
+    "stats": "tsx src/rate-limit-stats-cli.ts",
     "test:continuous": "tsx examples/continuous-test.ts",
     "demo": "tsx examples/full-broadcast-demo.ts",
     "demo:latency": "tsx examples/live-latency-demo.ts",
@@ -24,7 +25,9 @@
     "@waku/sdk": "0.0.36",
     "@waku/utils": "^0.0.27",
     "@xmtp/node-sdk": "^0.0.47",
+    "better-sqlite3": "^12.4.1",
     "chalk": "^5.3.0",
+    "drizzle-orm": "^0.44.7",
     "ethers": "^6.10.0",
     "mqtt": "^5.3.0",
     "nostr-tools": "^2.7.0",
@@ -33,7 +36,9 @@
     "ws": "^8.16.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.11.0",
+    "drizzle-kit": "^0.31.6",
     "tsx": "^4.20.6",
     "typescript": "^5.3.3"
   }
