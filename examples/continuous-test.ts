@@ -87,9 +87,12 @@ Examples:
 }
 
 function normalizeProtocolName(protocol: string): string {
-  if (protocol.startsWith('MQTT')) return 'MQTT';
-  if (protocol.startsWith('Nostr')) return 'Nostr';
-  if (protocol.startsWith('XMTP')) return 'XMTP';
+  const lower = protocol.toLowerCase();
+  if (lower.startsWith('mqtt')) return 'MQTT';
+  if (lower.startsWith('nostr')) return 'Nostr';
+  if (lower.startsWith('xmtp')) return 'XMTP';
+  if (lower.startsWith('waku')) return 'Waku';
+  if (lower.startsWith('iroh')) return 'IROH';
   return protocol;
 }
 
