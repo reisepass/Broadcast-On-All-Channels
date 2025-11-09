@@ -59,7 +59,7 @@ export interface BroadcastResult {
   protocol: string;
   success: boolean;
   error?: string;
-  latencyMs?: number;
+  latencyMs?: number; // Time to get relay/broker confirmation (NOT recipient receipt time)
 }
 
 export interface BroadcasterOptions {

@@ -30,8 +30,8 @@ export interface MessageReceipt {
   messageUuid: string;
   protocol: string;
   server?: string; // Server/relay URL (e.g., wss://relay.damus.io for Nostr, mqtt://broker.hivemq.com for MQTT)
-  receivedAt: number;
-  latencyMs: number;
+  receivedAt: number; // When WE received this message (only applies to incoming messages)
+  latencyMs: number; // Time from message timestamp to when we received it
 }
 
 export interface ChannelPreference {

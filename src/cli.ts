@@ -30,6 +30,7 @@ import type { ChatMessage } from './message-types.js';
 import { UserManager, type UserProfile } from './user-manager.js';
 import type { BroadcasterOptions } from './broadcaster.js';
 import { initLogger, type Logger } from './logger.js';
+import { getDisplayName } from './user-identifier.js';
 
 interface CLIArgs {
   protocols?: string[];
@@ -252,8 +253,10 @@ class ChatClient {
     this.identity = this.currentUser.identity;
 
     // Display identity
+    const myIdentifier = getDisplayName(this.identity.magnetLink);
     console.log(chalk.cyan('Your Identity:\n'));
     console.log(chalk.gray('User Name:'), chalk.white.bold(this.currentUser.name));
+    console.log(chalk.gray('Display ID:'), chalk.white.bold(`[${myIdentifier}]`));
     console.log('');
     console.log(chalk.gray('secp256k1 (XMTP, Nostr, Waku, MQTT):'));
     console.log(chalk.gray('  Ethereum Address:'), chalk.white(this.identity.secp256k1.ethereumAddress));
@@ -344,11 +347,11 @@ class ChatClient {
     try {
       const results = await this.broadcaster.sendMessage(this.chatPartner, content);
 
-      // Display results with checkmarks
-      console.log(chalk.gray('Delivery status:'));
+      // Display results - this shows confirmation from relays/brokers, not recipient receipt
+      console.log(chalk.gray('Send confirmation (relay/broker acknowledgment):'));
       for (const result of results) {
         if (result.success) {
-          console.log(chalk.green(`  ✓ ${result.protocol.padEnd(20)} ${result.latencyMs}ms`));
+          console.log(chalk.green(`  ✓ ${result.protocol.padEnd(20)} confirmed in ${result.latencyMs}ms`));
         } else {
           console.log(chalk.red(`  ✗ ${result.protocol.padEnd(20)} Failed`));
         }
@@ -365,12 +368,13 @@ class ChatClient {
       return;
     }
 
-    // Skip acknowledgments (we handle them silently)
+    // Handle acknowledgments (recipient confirmation)
     if (message.type === 'acknowledgment') {
       // Get the original message and show checkmark
       const receipts = await this.db.getMessageReceipts(message.content.replace('ACK: ', ''));
       if (receipts.length > 0) {
-        console.log(chalk.green(`\n  ✓ Acknowledged via ${protocol} (+${Date.now() - message.timestamp}ms)`));
+        const roundTripMs = Date.now() - message.timestamp;
+        console.log(chalk.green(`\n  ✓ Message received by recipient (acknowledged via ${protocol}, ~${roundTripMs}ms round-trip)`));
       }
       return;
     }
@@ -379,9 +383,12 @@ class ChatClient {
     const receipts = await this.db.getMessageReceipts(message.uuid);
     const firstReceipt = receipts[0];
 
+    // Get user identifier
+    const senderName = getDisplayName(message.fromMagnetLink);
+
     // Display the message
     console.log('');
-    console.log(chalk.blue.bold(`Them: ${message.content}`));
+    console.log(chalk.blue.bold(`[${senderName}]: ${message.content}`));
 
     // Show first protocol (fastest)
     if (firstReceipt) {
@@ -461,7 +468,8 @@ class ChatClient {
       if (msg.isAcknowledgment) continue; // Skip acks in history
 
       const isFromMe = msg.fromIdentity === this.identity.magnetLink;
-      const prefix = isFromMe ? chalk.green('You:') : chalk.blue('Them:');
+      const senderName = isFromMe ? 'You' : getDisplayName(msg.fromIdentity);
+      const prefix = isFromMe ? chalk.green(`[${senderName}]:`) : chalk.blue(`[${senderName}]:`);
       const time = new Date(msg.timestamp).toLocaleTimeString();
 
       console.log(`${chalk.gray(`[${time}]`)} ${prefix} ${msg.content}`);
