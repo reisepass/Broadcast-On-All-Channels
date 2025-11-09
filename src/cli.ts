@@ -217,7 +217,8 @@ class ChatClient {
       for (let i = 0; i < users.length; i++) {
         const user = users[i];
         const lastUsed = new Date(user.lastUsedAt).toLocaleString();
-        console.log(chalk.gray(`  ${i + 1}. ${chalk.white(user.name)} (last used: ${lastUsed})`));
+        const userIdentifier = getDisplayName(user.identity.magnetLink);
+        console.log(chalk.gray(`  ${i + 1}. ${chalk.white(user.name)} ${chalk.cyan(`[${userIdentifier}]`)} (last used: ${lastUsed})`));
       }
       console.log(chalk.gray(`  ${users.length + 1}. ${chalk.green('Create new user')}`));
       console.log('');
@@ -407,11 +408,6 @@ class ChatClient {
       }
     }
     console.log('');
-
-    // Redraw prompt
-    if (this.chatPartner) {
-      process.stdout.write(chalk.green('You: '));
-    }
   }
 
   private async handleReceipt(messageUuid: string, protocol: string, isDuplicate: boolean) {
@@ -421,6 +417,17 @@ class ChatClient {
     }
 
     try {
+      // Get the message to check if it's from self or is an acknowledgment
+      const message = await this.db.getMessage(messageUuid);
+      if (!message) {
+        return; // Message not found
+      }
+
+      // Skip display for messages from self (echo)
+      if (message.fromIdentity === this.identity.magnetLink) {
+        return;
+      }
+
       // Get all receipts for this message
       const receipts = await this.db.getMessageReceipts(messageUuid);
       if (receipts.length < 2) {
@@ -436,13 +443,9 @@ class ChatClient {
 
       const delta = currentReceipt.receivedAt - firstReceipt.receivedAt;
 
-      // Show the update
-      console.log(chalk.gray(`\n  📡 Also received via: ${chalk.white(protocol)} ${chalk.yellow(`+${delta}ms slower`)}`));
-
-      // Redraw prompt
-      if (this.chatPartner) {
-        process.stdout.write(chalk.green('You: '));
-      }
+      // Show the update with appropriate label
+      const label = message.isAcknowledgment ? 'ACK received via' : 'Also received via';
+      console.log(chalk.gray(`\n  📡 ${label}: ${chalk.white(protocol)} ${chalk.yellow(`+${delta}ms slower`)}`));
     } catch (error) {
       // Silently ignore - this is just for display, not critical
       this.logger.debug('Error in handleReceipt:', error);
