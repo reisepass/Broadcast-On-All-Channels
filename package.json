@@ -14,7 +14,8 @@
     "test:nostr": "tsx examples/nostr-test.ts",
     "test:iroh": "tsx examples/iroh-test.ts",
     "test:waku": "tsx examples/waku-test.ts",
-    "test:mqtt": "tsx examples/mqtt-test.ts"
+    "test:mqtt": "tsx examples/mqtt-test.ts",
+    "test:multi-user": "bun test tests/multi-user.test.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.15.15",

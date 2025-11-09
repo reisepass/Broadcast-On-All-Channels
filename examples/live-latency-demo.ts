@@ -14,72 +14,14 @@ import { ChatBroadcaster } from '../src/chat-broadcaster.js';
 import { ChatDatabase } from '../src/database.js';
 import { supportsXMTP, logRuntimeInfo } from '../src/runtime.js';
 import type { ChatMessage } from '../src/message-types.js';
-
-interface ProtocolStats {
-  sent: number;
-  received: number;
-  totalLatency: number;
-  avgLatency: number;
-  minLatency: number;
-  maxLatency: number;
-}
-
-interface UserStats {
-  name: string;
-  protocols: Map<string, ProtocolStats>;
-  totalSent: number;
-  totalReceived: number;
-}
-
-function initStats(name: string): UserStats {
-  return {
-    name,
-    protocols: new Map(),
-    totalSent: 0,
-    totalReceived: 0,
-  };
-}
-
-function getProtocolStats(stats: UserStats, protocol: string): ProtocolStats {
-  if (!stats.protocols.has(protocol)) {
-    stats.protocols.set(protocol, {
-      sent: 0,
-      received: 0,
-      totalLatency: 0,
-      avgLatency: 0,
-      minLatency: Infinity,
-      maxLatency: 0,
-    });
-  }
-  return stats.protocols.get(protocol)!;
-}
-
-// Normalize protocol names to remove extra details
-function normalizeProtocolName(protocol: string): string {
-  // Remove broker counts and relay counts
-  if (protocol.startsWith('MQTT')) return 'MQTT';
-  if (protocol.startsWith('Nostr')) return 'Nostr';
-  if (protocol.startsWith('XMTP')) return 'XMTP';
-  return protocol;
-}
-
-function updateReceivedStats(stats: UserStats, protocol: string, latencyMs: number) {
-  const normalizedProtocol = normalizeProtocolName(protocol);
-  const protocolStats = getProtocolStats(stats, normalizedProtocol);
-  protocolStats.received++;
-  protocolStats.totalLatency += latencyMs;
-  protocolStats.avgLatency = protocolStats.totalLatency / protocolStats.received;
-  protocolStats.minLatency = Math.min(protocolStats.minLatency, latencyMs);
-  protocolStats.maxLatency = Math.max(protocolStats.maxLatency, latencyMs);
-  stats.totalReceived++;
-}
-
-function updateSentStats(stats: UserStats, protocol: string) {
-  const normalizedProtocol = normalizeProtocolName(protocol);
-  const protocolStats = getProtocolStats(stats, normalizedProtocol);
-  protocolStats.sent++;
-  stats.totalSent++;
-}
+import {
+  type UserStats,
+  type ProtocolStats,
+  createUserStats,
+  updateReceivedStats,
+  updateSentStats,
+  getSortedProtocols,
+} from '../src/sdk/stats.js';
 
 function displayStatsTable(user1Stats: UserStats, user2Stats: UserStats) {
   console.log('\n╔══════════════════════════════════════════════════════════════════════════════════╗');
@@ -159,8 +101,8 @@ async function main() {
   logRuntimeInfo();
 
   // Initialize stats
-  const user1Stats = initStats('User 1');
-  const user2Stats = initStats('User 2');
+  const user1Stats = createUserStats('User 1');
+  const user2Stats = createUserStats('User 2');
 
   // Generate identities
   console.log('Generating identities...\n');

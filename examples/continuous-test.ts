@@ -17,24 +17,15 @@ import { IdentityStorage } from '../src/identity-storage.js';
 import { decodeIdentity, displayIdentity } from '../src/identity.js';
 import { logRuntimeInfo } from '../src/runtime.js';
 import type { ChatMessage } from '../src/message-types.js';
-
-interface ProtocolStats {
-  sent: number;
-  received: number;
-  totalLatency: number;
-  avgLatency: number;
-  minLatency: number;
-  maxLatency: number;
-  lastReceived?: number;
-}
-
-interface TestStats {
-  protocols: Map<string, ProtocolStats>;
-  totalSent: number;
-  totalReceived: number;
-  startTime: number;
-  lastMessageReceived?: number;
-}
+import {
+  type UserStats,
+  type ProtocolStats,
+  createUserStats,
+  updateReceivedStats,
+  updateSentStats,
+  getSortedProtocols,
+  formatUptime,
+} from '../src/sdk/stats.js';
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -86,54 +77,10 @@ Examples:
   return { recipient, identityIndex, interval };
 }
 
-function normalizeProtocolName(protocol: string): string {
-  const lower = protocol.toLowerCase();
-  if (lower.startsWith('mqtt')) return 'MQTT';
-  if (lower.startsWith('nostr')) return 'Nostr';
-  if (lower.startsWith('xmtp')) return 'XMTP';
-  if (lower.startsWith('waku')) return 'Waku';
-  if (lower.startsWith('iroh')) return 'IROH';
-  return protocol;
-}
+// Stats functions now imported from SDK
 
-function getProtocolStats(stats: TestStats, protocol: string): ProtocolStats {
-  const normalized = normalizeProtocolName(protocol);
-  if (!stats.protocols.has(normalized)) {
-    stats.protocols.set(normalized, {
-      sent: 0,
-      received: 0,
-      totalLatency: 0,
-      avgLatency: 0,
-      minLatency: Infinity,
-      maxLatency: 0,
-    });
-  }
-  return stats.protocols.get(normalized)!;
-}
-
-function updateReceivedStats(stats: TestStats, protocol: string, latencyMs: number) {
-  const protocolStats = getProtocolStats(stats, protocol);
-  protocolStats.received++;
-  protocolStats.totalLatency += latencyMs;
-  protocolStats.avgLatency = protocolStats.totalLatency / protocolStats.received;
-  protocolStats.minLatency = Math.min(protocolStats.minLatency, latencyMs);
-  protocolStats.maxLatency = Math.max(protocolStats.maxLatency, latencyMs);
-  protocolStats.lastReceived = Date.now();
-  stats.totalReceived++;
-  stats.lastMessageReceived = Date.now();
-}
-
-function updateSentStats(stats: TestStats, protocol: string) {
-  const protocolStats = getProtocolStats(stats, protocol);
-  protocolStats.sent++;
-  stats.totalSent++;
-}
-
-function displayStats(stats: TestStats, myMagnetLink: string, recipientMagnetLink: string) {
-  const uptime = Math.floor((Date.now() - stats.startTime) / 1000);
-  const hours = Math.floor(uptime / 3600);
-  const minutes = Math.floor((uptime % 3600) / 60);
-  const seconds = uptime % 60;
+function displayStats(stats: UserStats, myMagnetLink: string, recipientMagnetLink: string) {
+  const uptime = formatUptime(stats.startTime!);
 
   console.clear();
   console.log('═══════════════════════════════════════════════════════════════════════');
@@ -143,7 +90,7 @@ function displayStats(stats: TestStats, myMagnetLink: string, recipientMagnetLin
   console.log(`My Magnet:        ${myMagnetLink.substring(0, 60)}...`);
   console.log(`Recipient Magnet: ${recipientMagnetLink.substring(0, 60)}...`);
   console.log('');
-  console.log(`Uptime: ${hours}h ${minutes}m ${seconds}s`);
+  console.log(`Uptime: ${uptime}`);
   console.log(`Total Sent: ${stats.totalSent} | Total Received: ${stats.totalReceived}`);
 
   if (stats.lastMessageReceived) {
@@ -158,12 +105,7 @@ function displayStats(stats: TestStats, myMagnetLink: string, recipientMagnetLin
   console.log('│ Protocol     │ Sent │ Recv │ Avg (ms) │ Min (ms) │ Max (ms)         │');
   console.log('├──────────────┼──────┼──────┼──────────┼──────────┼──────────────────┤');
 
-  const protocols = Array.from(stats.protocols.entries()).sort((a, b) => {
-    // Sort by avg latency (fastest first)
-    if (a[1].avgLatency === 0) return 1;
-    if (b[1].avgLatency === 0) return -1;
-    return a[1].avgLatency - b[1].avgLatency;
-  });
+  const protocols = getSortedProtocols(stats);
 
   for (const [protocol, pstats] of protocols) {
     const name = protocol.padEnd(12);
@@ -231,12 +173,7 @@ async function main() {
   const db = new ChatDatabase(`./data/continuous-test-${storedIdentity.id}.db`);
   const broadcaster = new ChatBroadcaster(storedIdentity.identity, db);
 
-  const stats: TestStats = {
-    protocols: new Map(),
-    totalSent: 0,
-    totalReceived: 0,
-    startTime: Date.now(),
-  };
+  const stats = createUserStats(`Identity-${identityIndex}`);
 
   // Set up message handler
   broadcaster.onMessage((message: ChatMessage, protocol: string) => {
@@ -293,7 +230,7 @@ async function main() {
     console.log('  Test Summary');
     console.log('═══════════════════════════════════════════════════════════════════════');
     console.log('');
-    console.log(`Total runtime: ${Math.floor((Date.now() - stats.startTime) / 1000)}s`);
+    console.log(`Total runtime: ${formatUptime(stats.startTime!)}`);
     console.log(`Messages sent: ${stats.totalSent}`);
     console.log(`Messages received: ${stats.totalReceived}`);
     console.log('');
