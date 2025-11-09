@@ -55,11 +55,18 @@ export interface BroadcastMessage {
   timestamp: number;
 }
 
+export interface RelayDetail {
+  name: string; // Relay URL or broker host
+  success: boolean;
+  latencyMs?: number;
+}
+
 export interface BroadcastResult {
   protocol: string;
   success: boolean;
   error?: string;
   latencyMs?: number; // Time to get relay/broker confirmation (NOT recipient receipt time)
+  relayDetails?: RelayDetail[]; // Individual relay/broker results for Nostr and MQTT
 }
 
 export interface BroadcasterOptions {
@@ -119,6 +126,7 @@ export class Broadcaster {
   protected nostrRelays: Relay[] = [];
   protected wakuNode?: LightNode;
   protected mqttClients: mqtt.MqttClient[] = []; // Multiple MQTT brokers
+  protected mqttBrokerUrls: Map<mqtt.MqttClient, string> = new Map(); // Track broker URL for each client
   private irohNode?: Iroh;
 
   constructor(identity: UnifiedIdentity, loggerOrOptions?: Logger | BroadcasterOptions, options?: BroadcasterOptions) {
@@ -315,6 +323,7 @@ export class Broadcaster {
             client.on('connect', () => {
               clearTimeout(timeout);
               this.mqttClients.push(client);
+              this.mqttBrokerUrls.set(client, brokerUrl);
               resolve(client);
             });
 
@@ -523,18 +532,31 @@ export class Broadcaster {
 
       this.logger.info(`🔵 [Nostr] Publishing to ${connectedRelays.length}/${this.nostrRelays.length} connected relays...`);
 
-      // Publish to all connected relays and track first success
+      // Publish to all connected relays and track individual timing
       let firstSuccessTime: number | null = null;
+      const relayDetails: RelayDetail[] = [];
+
       const publishPromises = connectedRelays.map(async (relay, index) => {
+        const relayStartTime = Date.now();
         try {
           await relay.publish(signedEvent);
+          const relayLatency = Date.now() - relayStartTime;
           // Record first success time
           if (firstSuccessTime === null) {
             firstSuccessTime = Date.now();
             this.logger.info(`✅ [Nostr] First relay confirmed (relay ${index + 1})`);
           }
+          relayDetails.push({
+            name: relay.url,
+            success: true,
+            latencyMs: relayLatency,
+          });
           return { status: 'fulfilled' as const };
         } catch (error) {
+          relayDetails.push({
+            name: relay.url,
+            success: false,
+          });
           return { status: 'rejected' as const, error };
         }
       });
@@ -556,6 +578,7 @@ export class Broadcaster {
         protocol: `Nostr (${successCount}/${this.nostrRelays.length} relays)`,
         success: true,
         latencyMs: firstSuccessTime ? firstSuccessTime - startTime : Date.now() - startTime,
+        relayDetails,
       };
     } catch (error) {
       // Nostr failures are expected in a redundant system - log as debug, not error
@@ -658,18 +681,28 @@ export class Broadcaster {
     });
 
     // Publish to all connected brokers in parallel
-    // Track first success for accurate latency measurement
+    // Track first success and individual broker timing
     let firstSuccessTime: number | null = null;
     let completedCount = 0;
     let successCount = 0;
+    const relayDetails: RelayDetail[] = [];
 
     const publishPromises = this.mqttClients.map((client, index) => {
+      const brokerStartTime = Date.now();
+      const brokerUrl = this.mqttBrokerUrls.get(client) || `Broker ${index + 1}`;
+
       return new Promise<{ success: boolean; error?: string }>((resolve) => {
         try {
           client.publish(topic, payload, { qos: 1, retain: true }, (err) => {
             completedCount++;
+            const brokerLatency = Date.now() - brokerStartTime;
+
             if (err) {
               this.logger.debug(`[MQTT] Broker ${index + 1} failed (expected in redundant system):`, err);
+              relayDetails.push({
+                name: brokerUrl,
+                success: false,
+              });
               resolve({ success: false, error: String(err) });
             } else {
               successCount++;
@@ -677,6 +710,11 @@ export class Broadcaster {
               if (firstSuccessTime === null) {
                 firstSuccessTime = Date.now();
               }
+              relayDetails.push({
+                name: brokerUrl,
+                success: true,
+                latencyMs: brokerLatency,
+              });
               this.logger.info(`✅ [MQTT] Broker ${index + 1} success (${completedCount}/${this.mqttClients.length})`);
               resolve({ success: true });
             }
@@ -684,6 +722,10 @@ export class Broadcaster {
         } catch (error) {
           completedCount++;
           this.logger.debug(`[MQTT] Broker ${index + 1} exception (expected in redundant system):`, error);
+          relayDetails.push({
+            name: brokerUrl,
+            success: false,
+          });
           resolve({ success: false, error: String(error) });
         }
       });
@@ -698,6 +740,7 @@ export class Broadcaster {
       success: finalSuccessCount > 0,
       error: finalSuccessCount === 0 ? results[0]?.error : undefined,
       latencyMs: firstSuccessTime ? firstSuccessTime - startTime : Date.now() - startTime,
+      relayDetails,
     };
   }
 

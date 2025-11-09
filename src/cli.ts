@@ -353,6 +353,17 @@ class ChatClient {
       for (const result of results) {
         if (result.success) {
           console.log(chalk.green(`  ✓ ${result.protocol.padEnd(20)} confirmed in ${result.latencyMs}ms`));
+
+          // Show individual relay/broker details for Nostr and MQTT
+          if (result.relayDetails && result.relayDetails.length > 0) {
+            for (const relay of result.relayDetails) {
+              if (relay.success) {
+                // Extract just the hostname from URL for cleaner display
+                const hostname = relay.name.replace(/^(mqtt|wss?):\/\//, '').replace(/:\d+$/, '');
+                console.log(chalk.gray(`     └─ ${hostname.padEnd(30)} ${relay.latencyMs}ms`));
+              }
+            }
+          }
         } else {
           console.log(chalk.red(`  ✗ ${result.protocol.padEnd(20)} Failed`));
         }
