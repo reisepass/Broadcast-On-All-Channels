@@ -171,7 +171,7 @@ async function main() {
   // Initialize broadcaster
   console.log('Initializing broadcaster...\n');
   const db = new ChatDatabase(`./data/continuous-test-${storedIdentity.id}.db`);
-  const broadcaster = new ChatBroadcaster(storedIdentity.identity, db);
+  const broadcaster = new ChatBroadcaster(storedIdentity.identity, db, {});
 
   const stats = createUserStats(`Identity-${identityIndex}`);
 

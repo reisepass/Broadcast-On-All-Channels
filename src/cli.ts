@@ -133,7 +133,7 @@ class ChatClient {
     this.db = new ChatDatabase(this.userManager.getUserDbPath(this.currentUser.name));
 
     // Initialize broadcaster with protocol selection
-    this.broadcaster = new ChatBroadcaster(this.identity, this.db, this.logger, this.getProtocolOptions());
+    this.broadcaster = new ChatBroadcaster(this.identity, this.db, this.getProtocolOptions(), this.logger);
 
     // Set up message handler
     this.broadcaster.onMessage((message, protocol) => {

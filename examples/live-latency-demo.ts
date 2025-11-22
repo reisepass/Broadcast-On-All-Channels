@@ -115,8 +115,8 @@ async function main() {
 
   // Initialize broadcasters
   console.log('Initializing broadcasters...\n');
-  const broadcaster1 = new ChatBroadcaster(identity1, db1);
-  const broadcaster2 = new ChatBroadcaster(identity2, db2);
+  const broadcaster1 = new ChatBroadcaster(identity1, db1, {});
+  const broadcaster2 = new ChatBroadcaster(identity2, db2, {});
 
   await broadcaster1.initialize();
   await broadcaster2.initialize();

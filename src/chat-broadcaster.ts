@@ -43,7 +43,7 @@ export class ChatBroadcaster extends Broadcaster {
   private myMagnetLink: string;
   private logger: Logger;
 
-  constructor(identity: UnifiedIdentity, db: ChatDatabase, logger?: Logger, options?: Partial<BroadcasterOptions>) {
+  constructor(identity: UnifiedIdentity, db: ChatDatabase, options?: Partial<BroadcasterOptions>, logger?: Logger) {
     // Merge provided options with defaults
     const defaultOptions: BroadcasterOptions = {
       xmtpEnabled: supportsXMTP(), // Auto-enabled on Node.js/Deno
@@ -311,6 +311,12 @@ export class ChatBroadcaster extends Broadcaster {
               const chatMessage = deserializeMessage(message.content);
               if (!chatMessage) {
                 this.logger.debug('Failed to deserialize XMTP message (may be non-chat message)');
+                continue;
+              }
+
+              // Skip messages from self (XMTP echoes your own sent messages)
+              if (chatMessage.fromMagnetLink === this.myMagnetLink) {
+                this.logger.debug('Skipping XMTP message from self (echo)');
                 continue;
               }
 
